@@ -1,0 +1,32 @@
+{
+  "name": "airouter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "自用 AI 网关：OpenAI/Anthropic 格式统一入口、跨格式转换、失败转移，部署在 Cloudflare Workers",
+  "scripts": {
+    "build": "vite build",
+    "dev": "wrangler d1 migrations apply DB --local && wrangler dev",
+    "test": "vitest run",
+    "db:migrations:apply": "wrangler d1 migrations apply DB --remote",
+    "deploy": "npm run build && npm run db:migrations:apply && wrangler deploy"
+  },
+  "dependencies": {
+    "antd": "^6.6.8",
+    "hono": "^4.13.16",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.12",
+    "@cloudflare/workers-types": "^5.20261102.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.156.1"
+  }
+}

@@ -1,0 +1,25 @@
+// Cloudflare Workers 配置（Deploy to Cloudflare 按钮依据本文件自动创建资源）
+{
+  // Worker 名称
+  "name": "airouter",
+  // Worker 入口模块
+  "main": "src/worker/index.ts",
+  // 兼容性日期（固定值，全项目约束）
+  "compatibility_date": "2026-10-01",
+  // 静态资源：React 构建产物；API 路径先进 Worker，其余走静态资源与 SPA 回退
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/v1/*", "/admin/*", "/healthz"]
+  },
+  // D1 数据库绑定（database_id 为占位值：Deploy 按钮会自动建库并回填真实 id）
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "airouter",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      // D1 迁移目录（deploy 脚本会先应用迁移再部署）
+      "migrations_dir": "./migrations"
+    }
+  ]
+}

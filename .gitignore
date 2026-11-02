@@ -1,0 +1,15 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+
+# wrangler 本地状态与校验产物
+.wrangler/
+.wrangler-dryrun/
+
+# 本地环境变量
+.dev.vars
+
+# 日志
+*.log
