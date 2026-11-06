@@ -67,7 +67,8 @@ export ANTHROPIC_AUTH_TOKEN=sk-xxx
 
 | 概念 | 说明 |
 |---|---|
-| 渠道类型 | `openai`（上游为 `/v1/chat/completions`）或 `anthropic`（上游为 `/v1/messages`） |
+| 渠道类型 | `openai` 或 `anthropic` |
+| 上游地址 | 两种填法：**纯域名**（如 `https://relay.example.com`）→ 网关自动补 `/v1/chat/completions`；**带路径**（如 `https://open.bigmodel.cn/api/paas/v4`）→ 只拼 `/chat/completions`。国内厂商示例：智谱 `https://open.bigmodel.cn/api/paas/v4`、DeepSeek `https://api.deepseek.com/v1`、月之暗面 `https://api.moonshot.cn/v1` |
 | 模型路由 | 请求里的模型名匹配渠道的"模型列表"，命中即候选，按优先级从小到大尝试 |
 | 改名映射 | 客户端请求 `gpt-4o` → 上游按 `gpt-4o-2024-08-06` 调用（每渠道一对多配置） |
 | Responses 开关 | 仅 openai 渠道显示；开 = R 请求透传上游 `/v1/responses`，关 = 自动转成 chat 格式调用 |

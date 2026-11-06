@@ -33,14 +33,39 @@ export function pickPair(clientFmt: ClientFormat, ch: Channel): ConvPair | null 
 }
 
 /**
- * 上游端点路径（与 pickPair 的判定配套）
+ * 判断 base_url 是否带了路径（如智谱的 /api/paas/v4）：
+ * 带路径 → 拼接时只加方法路径；纯域名 → 补 /v1 版本前缀
+ * @param base_url 渠道上游地址
+ */
+function hasPath(base_url: string): boolean {
+  try {
+    const p = new URL(base_url).pathname
+    return p !== '' && p !== '/'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 上游方法路径（按渠道 base_url 形态自动适配版本前缀）：
+ * - 纯域名：/v1/chat/completions 等（OpenAI 式中转站）
+ * - 带路径：/chat/completions 等（智谱 /api/paas/v4 式厂商）
+ * @param base_url 渠道上游地址
+ * @param kind 方法类别
+ */
+export function upstreamMethodPath(base_url: string, kind: 'chat' | 'responses' | 'messages'): string {
+  const method = kind === 'chat' ? '/chat/completions' : kind === 'responses' ? '/responses' : '/messages'
+  return `${hasPath(base_url) ? '' : '/v1'}${method}`
+}
+
+/**
+ * 上游端点路径（与 pickPair 的判定配套；按 base_url 形态自动适配版本前缀）
  * @param clientFmt 客户端格式
  * @param ch 目标渠道
  */
 export function pickUpstreamPath(clientFmt: ClientFormat, ch: Channel): string {
-  if (ch.type === 'anthropic') return '/v1/messages'
-  if (clientFmt === 'openai-chat') return '/v1/chat/completions'
-  return ch.supports_responses ? '/v1/responses' : '/v1/chat/completions'
+  const kind: 'chat' | 'responses' | 'messages' = ch.type === 'anthropic' ? 'messages' : clientFmt === 'openai-chat' ? 'chat' : ch.supports_responses ? 'responses' : 'chat'
+  return upstreamMethodPath(ch.base_url, kind)
 }
 
 /**

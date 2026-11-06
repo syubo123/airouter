@@ -2,6 +2,7 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../env'
 import { adminAuth } from './auth'
+import { upstreamMethodPath } from '../gateway/upstream'
 import type { Channel } from '../types'
 
 /** 渠道表行（DB 原始形态，models/model_mapping 为 JSON 字符串） */
@@ -151,16 +152,18 @@ channelsApi.post('/:id/test', async (c) => {
   const ch = rowToChannel(row)
   const model = ch.model_mapping[ch.models[0]] ?? ch.models[0]
   const started = Date.now()
+  // 按渠道 base_url 形态适配版本前缀（纯域名补 /v1，带路径只拼方法路径）
+  const methodPath = ch.type === 'openai' ? upstreamMethodPath(ch.base_url, 'chat') : upstreamMethodPath(ch.base_url, 'messages')
   let resp: Response
   try {
     if (ch.type === 'openai') {
-      resp = await fetch(`${ch.base_url}/v1/chat/completions`, {
+      resp = await fetch(`${ch.base_url}${methodPath}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', Authorization: `Bearer ${ch.api_key}` },
         body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, stream: false }),
       })
     } else {
-      resp = await fetch(`${ch.base_url}/v1/messages`, {
+      resp = await fetch(`${ch.base_url}${methodPath}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': ch.api_key, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1, stream: false }),

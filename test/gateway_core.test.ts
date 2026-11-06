@@ -610,3 +610,22 @@ it('R 流式经 anthropic 渠道：多片段累积、completed 输出完整、id
   const stored = await json(got)
   expect(stored.output).toMatchObject([{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '你好' }] }])
 })
+
+// —— 兼容带路径的 base_url（智谱 /api/paas/v4 形态）——
+
+it('渠道 base_url 带路径（智谱形态）：按方法路径拼接而不是固定 /v1 前缀', async () => {
+  await insertChannel({ name: '智谱', type: 'openai', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' })
+  const key = await insertKey()
+
+  const stub = stubFetch([
+    (url) =>
+      url.pathname === '/api/paas/v4/chat/completions'
+        ? new Response(JSON.stringify({ id: 'zhipu_ok', choices: [{ index: 0, message: { role: 'assistant', content: '智谱答' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }), { status: 200 })
+        : null,
+  ])
+  stubs.push(stub)
+  const res = await gw('/v1/chat/completions', key, { model: 'test-model', messages: [{ role: 'user', content: 'hi' }] })
+  expect(res.status).toBe(200)
+  expect((await json(res)).choices[0].message.content).toBe('智谱答')
+  expect(stub.calls[0].url).toBe('https://open.bigmodel.cn/api/paas/v4/chat/completions')
+})
