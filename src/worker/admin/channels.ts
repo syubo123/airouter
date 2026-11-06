@@ -170,9 +170,9 @@ channelsApi.post('/:id/test', async (c) => {
       })
     }
   } catch (e) {
-    return c.json({ ok: false, status: 0, elapsed_ms: Date.now() - started, error: `连接失败：${(e as Error).message}` })
+    return c.json({ ok: false, status: 0, elapsed_ms: Date.now() - started, error: `连接失败：${(e as Error).message}`, url: `${ch.base_url}${methodPath}` })
   }
   const text = await resp.text()
   if (resp.ok) return c.json({ ok: true, status: resp.status, elapsed_ms: Date.now() - started })
-  return c.json({ ok: false, status: resp.status, elapsed_ms: Date.now() - started, error: text.slice(0, 500) })
+  return c.json({ ok: false, status: resp.status, elapsed_ms: Date.now() - started, error: text.slice(0, 500), url: `${ch.base_url}${methodPath}` })
 })

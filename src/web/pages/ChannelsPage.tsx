@@ -126,7 +126,16 @@ export default function ChannelsPage() {
       } else {
         modal.error({
           title: `${ch.name}：测试失败（HTTP ${r.status}，${r.elapsed_ms}ms）`,
-          content: <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 300, overflow: 'auto' }}>{r.error ?? ''}</pre>,
+          content: (
+            <div>
+              {(r as TestResult & { url?: string }).url && (
+                <p style={{ marginBottom: 8 }}>
+                  实际请求：<code>{(r as TestResult & { url?: string }).url}</code>
+                </p>
+              )}
+              <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 300, overflow: 'auto' }}>{r.error ?? ''}</pre>
+            </div>
+          ),
         })
       }
     } catch (e) {
