@@ -17,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "airouter",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "44e8a658-f7eb-4590-9983-e274e5b1693b",
       // D1 迁移目录（deploy 脚本会先应用迁移再部署）
       "migrations_dir": "./migrations"
     }
