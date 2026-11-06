@@ -1,11 +1,18 @@
 // Task 4：管理 CRUD（渠道/key/日志/统计）集成测试
 import { SELF, env } from 'cloudflare:test'
-import { beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetDb } from './db'
-import { stubFetch } from './fetchstub'
+import { stubFetch, type RecordedCall } from './fetchstub'
 
 // 每个测试前重置数据库
 beforeEach(resetDb)
+
+/** 已安装的 fetch 桩（afterEach 统一恢复） */
+let stubs: Array<{ calls: RecordedCall[]; restore(): void }> = []
+afterEach(() => {
+  for (const s of stubs) s.restore()
+  stubs = []
+})
 
 /** 测试用 Worker 地址 */
 const base = 'https://example.com'
@@ -193,4 +200,71 @@ it('渠道连通性测试：上游 401 返回 ok:false', async () => {
   } finally {
     stub.restore()
   }
+})
+
+// —— 拉取上游模型列表 ——
+
+it('fetch-models：openai 渠道，纯域名补 /v1/models 并带 Bearer 头', async () => {
+  const cookie = await login()
+  const stub = stubFetch([
+    (url) =>
+      url.pathname === '/v1/models'
+        ? new Response(JSON.stringify({ object: 'list', data: [{ id: 'm2' }, { id: 'm1' }, { id: 'm2' }] }), { status: 200 })
+        : null,
+  ])
+  stubs.push(stub)
+  const res = await req('/admin/api/channels/fetch-models', cookie, 'POST', {
+    type: 'openai',
+    base_url: 'https://up.example.com',
+    api_key: 'upk-9',
+  })
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as { ok: boolean; models: string[] }
+  expect(body.ok).toBe(true)
+  expect(body.models).toEqual(['m1', 'm2']) // 去重排序
+  expect(stub.calls[0].url).toBe('https://up.example.com/v1/models?limit=100')
+  expect((stub.calls[0].init?.headers as Record<string, string>)['Authorization']).toBe('Bearer upk-9')
+})
+
+it('fetch-models：带路径的 base_url 只拼 /models；anthropic 用 x-api-key 且分页聚合', async () => {
+  const cookie = await login()
+  let page = 0
+  const stub = stubFetch([
+    (url) => {
+      if (url.hostname !== 'zhipu.example.com' || url.pathname !== '/api/paas/v4/models') return null
+      page++
+      return page === 1
+        ? new Response(JSON.stringify({ data: [{ id: 'glm-a' }, { id: 'glm-b' }], has_more: true, last_id: 'glm-b' }), { status: 200 })
+        : new Response(JSON.stringify({ data: [{ id: 'glm-c' }], has_more: false }), { status: 200 })
+    },
+  ])
+  stubs.push(stub)
+  const res = await req('/admin/api/channels/fetch-models', cookie, 'POST', {
+    type: 'anthropic',
+    base_url: 'https://zhipu.example.com/api/paas/v4',
+    api_key: 'zk-1',
+  })
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as { ok: boolean; models: string[] }
+  expect(body.models).toEqual(['glm-a', 'glm-b', 'glm-c'])
+  expect(stub.calls).toHaveLength(2)
+  const h1 = stub.calls[0].init?.headers as Record<string, string>
+  expect(h1['x-api-key']).toBe('zk-1')
+  expect(stub.calls[0].url).toContain('limit=100')
+  expect(stub.calls[1].url).toContain('after_id=glm-b')
+})
+
+it('fetch-models：上游失败返回 ok:false；未登录 401', async () => {
+  const cookie = await login()
+  const stub = stubFetch([(url) => new Response('nope', { status: 403 })])
+  stubs.push(stub)
+  const bad = await req('/admin/api/channels/fetch-models', cookie, 'POST', {
+    type: 'openai',
+    base_url: 'https://up.example.com',
+    api_key: 'k',
+  })
+  const badBody = (await bad.json()) as { ok: boolean; status: number }
+  expect(badBody.ok).toBe(false)
+  expect(badBody.status).toBe(403)
+  expect((await SELF.fetch(`${base}/admin/api/channels/fetch-models`, { method: 'POST' })).status).toBe(401)
 })

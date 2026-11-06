@@ -112,11 +112,42 @@ export interface TestResult {
   elapsed_ms: number
   /** 失败时的错误摘要 */
   error?: string
+  /** 实际请求的上游 URL（失败时用于排查） */
+  url?: string
 }
 
 /** 渠道连通性测试 */
 export function testChannel(id: number): Promise<TestResult> {
   return send(`/admin/api/channels/${id}/test`, 'POST')
+}
+
+/** 拉取上游模型列表的入参 */
+export interface FetchModelsPayload {
+  /** 上游类型 */
+  type: 'openai' | 'anthropic'
+  /** 上游地址 */
+  base_url: string
+  /** 上游密钥 */
+  api_key: string
+}
+
+/** 拉取上游模型列表的结果 */
+export interface FetchModelsResult {
+  /** 是否成功 */
+  ok: boolean
+  /** 模型名列表（成功时） */
+  models?: string[]
+  /** 上游 HTTP 状态（失败时） */
+  status?: number
+  /** 错误摘要（失败时） */
+  error?: string
+  /** 实际请求的上游 URL（失败时用于排查） */
+  url?: string
+}
+
+/** 从上游拉取可用模型列表（未保存的草稿渠道也可以，直接传表单里的地址与密钥） */
+export function fetchChannelModels(payload: FetchModelsPayload): Promise<FetchModelsResult> {
+  return send('/admin/api/channels/fetch-models', 'POST', payload)
 }
 
 // —— API key ——

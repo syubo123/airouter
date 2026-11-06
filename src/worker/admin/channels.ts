@@ -144,6 +144,64 @@ channelsApi.delete('/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// 从上游拉取可用模型列表（新建/编辑渠道时供多选；OpenAI 单页，Anthropic 分页聚合）
+channelsApi.post('/fetch-models', async (c) => {
+  const body = (await c.req.json<Record<string, unknown>>().catch(() => null)) as Record<string, unknown> | null
+  const type = body?.type
+  const baseUrl = body?.base_url
+  const apiKey = body?.api_key
+  if ((type !== 'openai' && type !== 'anthropic') || typeof baseUrl !== 'string' || !/^https?:\/\//.test(baseUrl) || typeof apiKey !== 'string' || apiKey.length < 1) {
+    return c.json({ error: 'type、base_url（http s）、api_key 均为必填且合法' }, 400)
+  }
+  const headers: Record<string, string> =
+    type === 'openai'
+      ? { Authorization: `Bearer ${apiKey}` }
+      : { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
+  const modelsUrl = `${baseUrl}${upstreamMethodPath(baseUrl, 'models')}`
+  const ids = new Set<string>()
+  let lastStatus = 0
+  let lastError = ''
+
+  try {
+    // Anthropic 的 /models 有分页（has_more/last_id），最多跟随 10 页；OpenAI 单页
+    let afterId: string | undefined
+    for (let page = 0; page < (type === 'anthropic' ? 10 : 1); page++) {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 15000)
+      const sep = modelsUrl.includes('?') ? '&' : '?'
+      const url = afterId ? `${modelsUrl}${sep}limit=100&after_id=${encodeURIComponent(afterId)}` : `${modelsUrl}${sep}limit=100`
+      const resp = await fetch(url, { method: 'GET', headers, signal: ctrl.signal })
+      clearTimeout(timer)
+      lastStatus = resp.status
+      if (!resp.ok) {
+        lastError = (await resp.text().catch(() => '')).slice(0, 300)
+        break
+      }
+      const json = (await resp.json().catch(() => null)) as { data?: Array<{ id?: string } | string>; has_more?: boolean; last_id?: string } | null
+      if (!json || !Array.isArray(json.data)) {
+        lastError = '上游返回的模型列表格式无法识别'
+        break
+      }
+      for (const item of json.data) {
+        const id = typeof item === 'string' ? item : item?.id
+        if (typeof id === 'string' && id) ids.add(id)
+      }
+      if (json.has_more && json.last_id) {
+        afterId = json.last_id
+        continue
+      }
+      break
+    }
+  } catch (e) {
+    return c.json({ ok: false, status: 0, error: `连接失败：${(e as Error).message}`, url: modelsUrl })
+  }
+
+  if (ids.size === 0) {
+    return c.json({ ok: false, status: lastStatus, error: lastError || '上游未返回任何模型', url: modelsUrl })
+  }
+  return c.json({ ok: true, models: [...ids].sort() })
+})
+
 // 连通性测试：向该渠道上游发最小非流式请求（模型取列表第一个并应用改名映射）
 channelsApi.post('/:id/test', async (c) => {
   const id = Number(c.req.param('id'))

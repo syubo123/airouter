@@ -1,9 +1,18 @@
 // 渠道管理：列表 + 新建/编辑抽屉 + 连通性测试
 import { useEffect, useState } from 'react'
 import { App, Button, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Switch, Table, Tag } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { Channel } from '../../worker/types'
-import { createChannel, deleteChannel, listChannels, testChannel, updateChannel, type ChannelForm, type TestResult } from '../api'
+import {
+  createChannel,
+  deleteChannel,
+  fetchChannelModels,
+  listChannels,
+  testChannel,
+  updateChannel,
+  type ChannelForm,
+  type TestResult,
+} from '../api'
 
 /** 渠道表单值（model_mapping 用行数组编辑） */
 interface ChannelFormValues {
@@ -38,6 +47,10 @@ export default function ChannelsPage() {
   const [editing, setEditing] = useState<Channel | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [testing, setTesting] = useState<number | null>(null)
+  /** 拉取上游模型列表进行中 */
+  const [fetchingModels, setFetchingModels] = useState(false)
+  /** 从上游拉到的模型选项（多选下拉用） */
+  const [modelOptions, setModelOptions] = useState<Array<{ value: string; label: string }>>([])
   const [form] = Form.useForm<ChannelFormValues>()
   const watchType = Form.useWatch('type', form)
 
@@ -63,6 +76,7 @@ export default function ChannelsPage() {
     setEditing(null)
     form.resetFields()
     form.setFieldsValue({ type: 'openai', models: [], mappings: [], priority: 0, supports_responses: false, enabled: true })
+    setModelOptions([])
     setDrawerOpen(true)
   }
 
@@ -80,7 +94,36 @@ export default function ChannelsPage() {
       supports_responses: ch.supports_responses,
       enabled: ch.enabled,
     })
+    setModelOptions(ch.models.map((m) => ({ value: m, label: m })))
     setDrawerOpen(true)
+  }
+
+  /** 从上游拉取可用模型列表，填入多选下拉（字段为空时自动全选） */
+  const onFetchModels = async () => {
+    const type = form.getFieldValue('type') as 'openai' | 'anthropic' | undefined
+    const baseUrl = form.getFieldValue('base_url') as string | undefined
+    const apiKey = form.getFieldValue('api_key') as string | undefined
+    if (!baseUrl || !apiKey) {
+      message.warning('请先填写上游地址与上游密钥')
+      return
+    }
+    setFetchingModels(true)
+    try {
+      const r = await fetchChannelModels({ type: type ?? 'openai', base_url: baseUrl, api_key: apiKey })
+      if (r.ok && r.models?.length) {
+        setModelOptions(r.models.map((m) => ({ value: m, label: m })))
+        if (!(form.getFieldValue('models') as string[] | undefined)?.length) {
+          form.setFieldValue('models', r.models) // 字段为空时自动全选
+        }
+        message.success(`获取到 ${r.models.length} 个模型，请在下拉中多选`)
+      } else {
+        message.error(`获取失败（HTTP ${r.status ?? 0}）：${(r.error ?? '').slice(0, 200)}`)
+      }
+    } catch (e) {
+      message.error((e as Error).message)
+    } finally {
+      setFetchingModels(false)
+    }
   }
 
   /** 提交新建/编辑 */
@@ -252,8 +295,17 @@ export default function ChannelsPage() {
           <Form.Item name="api_key" label="上游密钥" rules={[{ required: true, message: '请输入密钥' }]}>
             <Input.Password placeholder="上游 API key" />
           </Form.Item>
-          <Form.Item name="models" label="支持的模型（回车添加，填客户端侧名称）" rules={[{ required: true, message: '至少一个模型' }]}>
-            <Select mode="tags" placeholder="如 gpt-4o、claude-3-5-sonnet" open={false} />
+          <Form.Item
+            name="models"
+            label="支持的模型（可从上游获取后多选，也可手动输入）"
+            rules={[{ required: true, message: '至少一个模型' }]}
+          >
+            <Select mode="tags" placeholder="点击下方按钮获取，或直接输入模型名" options={modelOptions} />
+          </Form.Item>
+          <Form.Item label=" " colon={false}>
+            <Button size="small" icon={<ReloadOutlined />} loading={fetchingModels} onClick={onFetchModels}>
+              从上游获取模型列表
+            </Button>
           </Form.Item>
           <Form.Item label="模型改名映射（客户端名 → 上游名，可选）">
             <Form.List name="mappings">

@@ -51,10 +51,10 @@ function hasPath(base_url: string): boolean {
  * - 纯域名：/v1/chat/completions 等（OpenAI 式中转站）
  * - 带路径：/chat/completions 等（智谱 /api/paas/v4 式厂商）
  * @param base_url 渠道上游地址
- * @param kind 方法类别
+ * @param kind 方法类别（models 为模型列表查询端点）
  */
-export function upstreamMethodPath(base_url: string, kind: 'chat' | 'responses' | 'messages'): string {
-  const method = kind === 'chat' ? '/chat/completions' : kind === 'responses' ? '/responses' : '/messages'
+export function upstreamMethodPath(base_url: string, kind: 'chat' | 'responses' | 'messages' | 'models'): string {
+  const method = kind === 'chat' ? '/chat/completions' : kind === 'responses' ? '/responses' : kind === 'models' ? '/models' : '/messages'
   return `${hasPath(base_url) ? '' : '/v1'}${method}`
 }
 
